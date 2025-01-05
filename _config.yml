@@ -30,4 +30,4 @@ plugins:
 # Custom variables
 owner : "Casp3r0x0 hassan al-khafaji"
 year : "2025"
-google_analytics: "G-EV4ZXPN8D6"
+google_analytics: [G-EV4ZXPN8D6]
