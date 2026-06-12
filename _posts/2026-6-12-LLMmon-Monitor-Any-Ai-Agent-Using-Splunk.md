@@ -8,7 +8,9 @@ Every organization has a security stack built around visibility: firewalls, prox
 
 ---
 
-![](https://www.pwntricks.com/assets/images/10/icon-removebg-preview.jpg)
+<p align="center">
+  <img src="https://www.pwntricks.com/assets/images/10/icon-removebg-preview.jpg" />
+</p>
 
 ## Introducing LLMmon
 
