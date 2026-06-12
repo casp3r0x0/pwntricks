@@ -122,11 +122,13 @@ Now here's where LLMmon earns its keep. Because every request is sitting in `llm
 
 spl
 
-`index="llmmon_logs" event_type="llm_request"
+```
+index="llmmon_logs" event_type="llm_request"
 | rex field=request_body "\"role\\\":\\\"user\\\",\\\"content\\\":\\\"(?P<message>[^\\\"]+)\\\""
 | rex field=message "(?P<base64_match>[A-Za-z0-9+/]{8,}={0,2})"
 | where isnotnull(base64_match)
-| table _time request_id model message base64_match`
+| table _time request_id model message base64_match
+```
 
 ![](https://www.pwntricks.com/assets/images/10/image%2012.png)
 
